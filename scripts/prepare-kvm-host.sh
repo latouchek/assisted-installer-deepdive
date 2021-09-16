@@ -18,4 +18,4 @@ setenforce 0
 
 cd /opt/terraform/pool-net
 terraform init
-terraform apply -auto-approved
+terraform apply -auto-approve
