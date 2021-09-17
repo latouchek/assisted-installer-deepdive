@@ -1,36 +1,29 @@
-
-
-
-
-
 # Assisted Installer on premise deep dive
-
-
-
 
 ## Introduction
 
-In this series of blog posts ,we will demonstrate how Infra as a code becomes a reality with OpenShift Assisted Installer onprem and how we can leverage on its powerful API to automate and tweak OCP4 deployment on baremetal or Vsphere.
-
+In this series of blog posts, we will demonstrate how Infrastructure as a code becomes a reality with OpenShift Assisted Installer onprem. This post will leverage kvm to show how to use Assisted Installer to deploy OpenShift, but the concepts here can extend to baremetal or vSphere deployments just as easily.
 
 ## Lab Preparation
 
 In this lab we will simulate Baremetal nodes with KVM VMs. Terraform will be use to orchestrate this virtual infrastructure.
-A minimum of 256Go of Ram and 500G SSD drive is recommended.
+A minimum of 256Gb of Ram and 500Gb SSD drive is recommended. The scripts and install steps below are based around the use of a Centos 8 machine as your host machine.
 In order to have everything set and all the bits installed, run the following commands:
+
 ```bash
 git clone https://github.com/latouchek/assisted-installer-deepdive.git
 cd assisted-installer-deepdive
 cp -r terraform /opt/
 cd scripts
 sh prepare-kvm-host
- ```
+```
 
-The script creates a dedicated ocp network. It is mandatory to have a DNS and a static DHCP server on that network .
-A dnsmasq.conf template is provided in assisted-installer-deepdive/conf/ with mac adresses matching the OCP VMs that we will deploy later. It can either be run on the host or on a dedicated VM/container
+The script creates a dedicated ocp network. It is mandatory to have a DNS and a static DHCP server on that network.
+A `dnsmasq.conf` template is provided in `assisted-installer-deepdive/config/` with mac adresses matching the OCP VMs that we will deploy later. It can be run on the host or on a dedicated VM/container.
+
 ## Part I : Deploying the OpenShift Assisted Installer service on premise
 
-####  1. Get the bits and build the service!
+### 1. Get the bits and build the service
 
 ```bash
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
@@ -43,6 +36,7 @@ cd assisted-service
 IP=192.167.124.1
 AI_URL=http://$IP:8090
 ```
+
 Modify **onprem-environment** and **Makefile** to set proper URL and port forwarding
 
 ```bash
@@ -53,40 +47,47 @@ make deploy-onprem
 .
 .
 ```
+
 If everything went well, we should see 4 containers running inside a pod
+
 ```bash
-[root@kvm-host ~]# podman ps
+[root@kvm-host ~]podman ps
 CONTAINER ID  IMAGE                                          COMMAND               CREATED             STATUS                 PORTS                                                                                           NAMES
 a940818185cb  k8s.gcr.io/pause:3.5                                                 3 minutes ago       Up 2 minutes ago       0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  59b56cb07140-infra
 d94a46c8b515  quay.io/ocpmetal/postgresql-12-centos7:latest  run-postgresql        2 minutes ago       Up 2 minutes ago       0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  db
 8c0e90d8c4fa  quay.io/ocpmetal/ocp-metal-ui:latest           /opt/bitnami/scri...  About a minute ago  Up About a minute ago  0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  ui
 e98627cdc5f8  quay.io/ocpmetal/assisted-service:latest       /assisted-service     42 seconds ago      Up 43 seconds ago      0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  installer
-
 ```
 
 ```bash
 [root@kvm-host ~] podman pod ps
 POD ID        NAME                STATUS      CREATED        INFRA ID      # OF CONTAINERS
 59b56cb07140  assisted-installer  Running     4 minutes ago  a940818185cb  4
-
 ```
-API should be accessible at  http://192.167.124.1:8090 and GUI at http://192.167.124.1:8080/
+
+API should be accessible at http://192.167.124.1:8090 and GUI at http://192.167.124.1:8080/
 
 API documentation can be found [here](https://generator.swagger.io/?url=https://raw.githubusercontent.com/openshift/assisted-service/master/swagger.yaml)
-#### 2.  How does it work ?
-In order to provision a cluster the following process must be followed
- - Create a new OpenShift cluster definition in a json file
-  - Register the new cluster by presenting the definition data to the API
-  - Create a discovery boot media the nodes will boot from in order to be introspected and validated
-  - Assign roles to introspected nodes and complete the cluster definition
-  - Trigger the deployment
+
+### 2.  How does it work
+
+In order to provision a cluster the following process must be followed:
+
+- Create a new OpenShift cluster definition in a json file
+- Register the new cluster by presenting the definition data to the API
+- Create a discovery boot media the nodes will boot from in order to be introspected and validated
+- Assign roles to introspected nodes and complete the cluster definition
+- Trigger the deployment
 
 ## Part II : Using the Assisted Installer API
+
 In this part we will show how to deploy a 5 nodes OCP cluster y following the steps we mentioned above.
 Even though this lab is purely cli based it is recommended to have the [UI](http://192.167.124.1:8080/) on sight to understand the whole process.
-#### 1. Deploy  our first cluster with AI  API
 
- - Create a cluster definition file
+### 1. Deploy  our first cluster with AI  API
+
+- Create a cluster definition file
+  
     ```bash
     export CLUSTER_SSHKEY=$(cat ~/.ssh/id_ed25519.pub)
     export PULL_SECRET=$(cat pull-secret.txt | jq -R .)
@@ -130,16 +131,15 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
     EOF
    ```
 
-   **high_availability_mode** and **schedulable_masters** parameters let you decide what type of cluster    you want to install. Here is how to set those parameters:
+  **high_availability_mode** and **schedulable_masters** parameters let you decide what type of cluster you want to install. Here is how to set those parameters:
 
-   - 3 nodes clusters:  **"high_availability_mode": "Full"** and **"schedulable_masters": true**
-   - 3+ nodes clusters:   **"high_availability_mode": "Full"** and **"schedulable_masters": false**
-   - Single Node:   **"high_availability_mode": "None"**
+  - 3 nodes clusters:  **"high_availability_mode": "Full"** and **"schedulable_masters": true**
+  - 3+ nodes clusters:   **"high_availability_mode": "Full"** and **"schedulable_masters": false**
+  - Single Node:   **"high_availability_mode": "None"**
 
-   You can choose if you want to handle  **loadbalancing** in house or leave it to OCP by  setting **user_managed_networking** to **true** or **false**. In both case, DHCP and DNS server are mandatory (Only DNS in the case of a static IP deployment)
+   You can choose if you want to handle **loadbalancing** in house or leave it to OCP by setting **user_managed_networking** to **true** or **false**. In both case, DHCP and DNS server are mandatory (Only DNS in the case of a static IP deployment).
 
-
- - Use  deployment-multinodes.json to register the new cluster
+- Use  deployment-multinodes.json to register the new cluster
 
    ```bash
    AI_URL='http://192.167.124.1:8090'
@@ -147,30 +147,32 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
       -d @./deployment-multinodes.json --header "Content-Type: application/json" | jq .
    ```
 
- - Check cluster is registered
-   Once the cluster definition has been sent to an the API we should be able to retrieve its unique id
-   ```bash
+- Check cluster is registered
+  Once the cluster definition has been sent to an the API we should be able to retrieve its unique id
+
+  ```bash
     CLUSTER_ID=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].id')
     [root@kvm-host ~] echo $CLUSTER_ID
     43b9c2f0-218e-4e76-8889-938fd52d6290
-    ```
- - Check the new cluster status
-    ```bash
-    [root@kvm-host ~]# curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].status'
+  ```
 
-    pending-for-input
-    ```
-
+- Check the new cluster status
+  
+  ```bash
+    [root@kvm-host ~] curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].status'
+  pending-for-input
+  ```
 
    When registering a cluster, the assisted installer runs a series of validation tests to assess if the cluster is ready to be  deployed.
   'pending-for-input' tells us we need to take some actions. Let's take a look at validations_info:
-    ```bash
+
+  ```bash
    curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].validations_info'|jq .
-     ```
+  ```
+
    We can see below that the installer is waiting for the hosts . Before building the hosts, we need to create the Discovery ISO.
 
-    ```bash
-
+  ```json
     {
       "id": "sufficient-masters-count",
       "status": "failure",
@@ -183,11 +185,13 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
       "status": "success",
       "message": "The Cluster Network CIDR is defined."
     },
-    ```
+  ```
+
 - Build  the discovery boot ISO
-The discovery boot ISO is a live CoreOS image that the nodes will boot from. Once booted an introspection will be performed by the discovery agent and datas sent to the assisted service. If the node passes the validation tests its **status_info** will be **"Host is ready to be installed"**.
+The discovery boot ISO is a live CoreOS image that the nodes will boot from. Once booted an introspection will be performed by the discovery agent and data sent to the assisted service. If the node passes the validation tests its **status_info** will be **"Host is ready to be installed"**.
 We need some extra parameters to be injected into the ISO . To do so, we create a data file as described bellow:
-    ```bash
+
+  ```bash
     cat << EOF > ./discovery-iso-params.json
    {
     "ssh_public_key": "$CLUSTER_SSHKEY",
@@ -195,36 +199,34 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
      "image_type": "full-iso"
     }
    EOF
-   ```
+  ```
+
   ISO is now ready to be built! Let's make the API call! As you can see we use the data file so pull-secret and ssh public key are injected into the live ISO.
-     ```bash
+
+  ```bash
    curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \  
   -d @discovery-iso-params.json \
   --header "Content-Type: application/json" \
   | jq '.'
-    ```
-  In real world we would need to present this ISO to our hosts so they can boot it from. Because we are using KVM, we are going to download the ISO in the libvirt images directory and later create the VMs
+  ```
+
+  In real world we would need to present this ISO to our hosts so they can boot from it. Because we are using KVM, we are going to download the ISO in the libvirt images directory and later create the VMs
 
   ```bash
   curl \
     -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \
     -o /var/lib/libvirt/images/default/discovery_image_ocpd.iso
   ```
+
 - Start the nodes and the discovery process
    In this lab, BM nodes are virtual and need to be provisioned first. A Terraform file is provided and will build 3 Masters, 4 workers. All the VMS are using the previously generated ISO to boot. Run the following commands inside the Terraform folder
 
   ```bash
   [root@kvm-host terraform-ocp4-cluster-ai] terraform init ; terraform apply -auto-approve
-
-
-
    Apply complete! Resources: 24 added, 0 changed, 0 destroyed.
-    ```
+  ```
 
-
-
-     ```bash
-
+  ```bash
   [root@kvm-host terraform-ocp4-cluster-ai] virsh list --all
    Id   Name               State
   -----------------------------------
@@ -236,15 +238,16 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
    -    ocp4-worker2       shut off
    -    ocp4-worker3       shut off
   ```
-  Only the master nodes will start for now. Wait 1 mn for them to be discovered  and check validations_info
 
+  Only the master nodes will start for now. Wait 1 mn for them to be discovered and check validations_info
 
   ```bash
    curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" \
    -H "accept: application/json" \
    -H "get_unregistered_clusters: false"| jq -r '.[].progress'
-   ```
-   ```bash
+  ```
+
+  ```json
      ........
      "hosts-data": [
        {
@@ -258,19 +261,18 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
          "message": "The cluster has a sufficient number of master candidates."
        }
        .........
-    ```
-  Our hosts have been validated and are ready to be installed. Let's take a closer look at the discovery data!
- - Retrieve the discovery hosts datas with an API call
+  ```
 
-
+  Our hosts have been validated and are ready to be installed. Let's take a closer look at the discovery data.
+- Retrieve the discovery hosts data with an API call
 
    ```bash
-   [root@kvm-host ~]# curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" \
+   [root@kvm-host ~]curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" \
    -H "accept: application/json" \
    -H "get_unregistered_clusters: false"| jq -r '.[].hosts'
    ```
 
-    ```bash
+    ```json
      .......
      {
     "checked_in_at": "2021-09-15T22:57:25.484Z",
@@ -305,9 +307,11 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
     "user_name": "admin",
     "validations_info": "{\"hardware\":[{\"id\":\"has-inventory\",\"status\":\"success\",\"message\":\"Valid inventory exists for the host\"},{\"id\":\"has-min-cpu-cores\",\"status\":\"success\",\"message\":\"Sufficient CPU cores\"},{\"id\":\"has-min-memory\",\"status\":\"success\",\"message\":\"Sufficient minimum RAM\"},{\"id\":\"has-min-valid-disks\",\"status\":\"success\",\"message\":\"Sufficient disk capacity\"},{\"id\":\"has-cpu-cores-for-role\",\"status\":\"success\",\"message\":\"Sufficient CPU cores for role auto-assign\"},{\"id\":\"has-memory-for-role\",\"status\":\"success\",\"message\":\"Sufficient RAM for role auto-assign\"},{\"id\":\"hostname-unique\",\"status\":\"success\",\"message\":\"Hostname ocp4-master0.ocpd.lab.local is unique in cluster\"},{\"id\":\"hostname-valid\",\"status\":\"success\",\"message\":\"Hostname ocp4-master0.ocpd.lab.local is allowed\"},{\"id\":\"valid-platform\",\"status\":\"success\",\"message\":\"Platform KVM is allowed\"},{\"id\":\"sufficient-installation-disk-speed\",\"status\":\"success\",\"message\":\"Speed of installation disk has not yet been measured\"},{\"id\":\"compatible-with-cluster-platform\",\"status\":\"success\",\"message\":\"Host is compatible with cluster platform baremetal\"}],\"network\":[{\"id\":\"connected\",\"status\":\"success\",\"message\":\"Host is connected\"},{\"id\":\"machine-cidr-defined\",\"status\":\"success\",\"message\":\"Machine Network CIDR is defined\"},{\"id\":\"belongs-to-machine-cidr\",\"status\":\"success\",\"message\":\"Host belongs to all machine network CIDRs\"},{\"id\":\"belongs-to-majority-group\",\"status\":\"success\",\"message\":\"Host has connectivity to the majority of hosts in the cluster\"},{\"id\":\"ntp-synced\",\"status\":\"success\",\"message\":\"Host NTP is synced\"},{\"id\":\"container-images-available\",\"status\":\"success\",\"message\":\"All required container images were either pulled successfully or no attempt was made to pull them\"},{\"id\":\"sufficient-network-latency-requirement-for-role\",\"status\":\"success\",\"message\":\"Network latency requirement has been satisfied.\"},{\"id\":\"sufficient-packet-loss-requirement-for-role\",\"status\":\"success\",\"message\":\"Packet loss requirement has been satisfied.\"},{\"id\":\"has-default-route\",\"status\":\"success\",\"message\":\"Host has been configured with at least one default route.\"},{\"id\":\"api-domain-name-resolved-correctly\",\"status\":\"success\",\"message\":\"Domain name resolution is not required (managed networking)\"},{\"id\":\"api-int-domain-name-resolved-correctly\",\"status\":\"success\",\"message\":\"Domain name resolution is not required (managed networking)\"},{\"id\":\"apps-domain-name-resolved-correctly\",\"status\":\"success\",\"message\":\"Domain name resolution is not required (managed networking)\"},{\"id\":\"dns-wildcard-not-configured\",\"status\":\"success\",\"message\":\"DNS wildcard check was successful\"}],\"operators\":[{\"id\":\"cnv-requirements-satisfied\",\"status\":\"success\",\"message\":\"cnv is disabled\"},{\"id\":\"lso-requirements-satisfied\",\"status\":\"success\",\"message\":\"lso is disabled\"},{\"id\":\"ocs-requirements-satisfied\",\"status\":\"success\",\"message\":\"ocs is disabled\"}]}"
    }
-   ```
-   This is a truncated version of the full ouput as it contains quite a lot of informations. Basically the agent provides all hardware infos to the assisted service so it can have a precise inventory of the host hardware and eventually validate the nodes.
-   To get more infos about validation and hardware inventory, you can use those 2 one liners
+  ```
+
+   This is a truncated version of the full ouput as it contains quite a lot of informations. Basically the agent provides all hardware info to the assisted service so it can have a precise inventory of the host hardware and eventually validate the nodes.
+   To get more info about validation and hardware inventory, you can use these 2 one liners
+  
      ```bash
      curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" \
     -H "get_unregistered_clusters: false"| jq -r '.[].validations_info'|jq .
@@ -318,8 +322,8 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
      -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].inventory'|jq -r .
      ```
 
-
    One important point to notice is that each hosts gets its own id after this process. We can extract these with the following call:
+
    ```bash
    [root@kvm-host ~] curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
    -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].id'
@@ -327,61 +331,65 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
    2121a000-d27e-4596-a408-6813d3114caf
    84083091-8c0c-470b-a157-d002dbeed785
    fa89d7cd-c2d9-4f26-bd78-155647a32b04
-
    ```
+
 - Assign role to discovered Nodes
  After validation, each node gets the  'auto-assign' role. We can check with  this API call:
+
     ```bash
-  [root@kvm-host ~]# curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept:    application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].role'
+  [root@kvm-host ~]curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept:    application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].role'
   auto-assign
   auto-assign
   auto-assign
    ```
+
   If you want something a bit more predictable, you  can assign roles based on nodes id. Since only our master nodes have been discovered, we will assign them the master role:
 
-
-   ```bash
+  ```bash
    for i in `curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
      -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].id'| awk 'NR>0' |awk '{print $1;}'`
    do curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"hosts_roles\": [ { \"id\": \"$i\", \"role\": \"master\" } ]}"
    done
 
-   ```
+  ```
+
   Check the result:
-   ```bash
-  [root@kvm-host ~]# curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
+
+  ```bash
+  [root@kvm-host ~]curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
   -H "accept: application/json" \
    -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].role'
   master
   master
   master
-   ```
- - Add workers, complete configuration and trigger the installation
+  ```
+
+- Add workers, complete configuration and trigger the installation
 
    It's now time to start our workers. The same discovery process will take place and the new nodes will get the **auto-assign** role. Because a cluster cannot have more than 3 masters, we are sure **auto-assign=worker** this time.
-  Because we set **vip_dhcp_allocation** to  **false** in the cluster definition filer, we need to set **api_vip** parameter before we can trigger the installation.
-   ```bash
+  Because we set **vip_dhcp_allocation** to **false** in the cluster definition filer, we need to set **api_vip** parameter before we can trigger the installation.
+
+  ```bash
     curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" \
     -H "accept: application/json"\
     -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
+  ```
 
-   ```
-     And finally start installation:
+   And finally start installation:
 
    ```bash
      curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" \
      -H "accept: application/json" \
      -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
     ```
+
    During the installation process, disks will be written and nodes will reboot. One of the masters will also play the bootstrap role until the control plane is ready then the installation will continue as usual.
-
-
-
 
 - Monitoring the installation progress
 We can closely monitor the nodes states during the installation process:
+
   ```bash
-  [root@kvm-host ~]# curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
+  [root@kvm-host ~]curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
    -H "accept: application/json" \
    -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].progress'
   {
@@ -417,11 +425,12 @@ We can closely monitor the nodes states during the installation process:
     "stage_started_at": "2021-09-16T15:56:42.398Z",
     "stage_updated_at": "2021-09-16T15:56:42.398Z"
   }
-
   ```
+
   To monitor the whole installation progress:
+
    ```bash
-   [root@kvm-host ~]# curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" \
+   [root@kvm-host ~]curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" \
    -H "accept: application/json" \
    -H "get_unregistered_clusters: false"| jq -r '.[].progress'
   {
@@ -432,7 +441,9 @@ We can closely monitor the nodes states during the installation process:
   }
 
    ```
+
 - Retrieve kubeconfig and credentials
+  
   ```bash
   [root@kvm-host ~]curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/kubeconfig" -H "accept: application/octet-stream" > .kube/config
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
@@ -445,11 +456,10 @@ We can closely monitor the nodes states during the installation process:
   ocp4-master2.ocpd.lab.local   Ready    master   134m   v1.21.1+9807387
   ocp4-worker0.ocpd.lab.local   Ready    worker   119m   v1.21.1+9807387
   ocp4-worker1.ocpd.lab.local   Ready    worker   119m   v1.21.1+9807387
-
   ```
 
   ```bash
-  [root@kvm-host ~]# curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/credentials" -H "accept: application/json" |jq -r .
+  [root@kvm-host ~]curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/credentials" -H "accept: application/json" |jq -r .
     % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                    Dload  Upload   Total   Spent    Left  Speed
   100   132  100   132    0     0  44000      0 --:--:-- --:--:-- --:--:-- 44000
@@ -459,15 +469,20 @@ We can closely monitor the nodes states during the installation process:
     "username": "kubeadmin"
   }
   ```  
+
 ## Part III : Day 2 Operations
-####  1. Adding worker nodes
+
+### 1. Adding worker nodes
+
 Coming Soon .....
 
 ### Thank you for reading
-* References
-  * https://generator.swagger.io/?url=https://raw.githubusercontent.com/openshift/assisted-service/master/swagger.yaml
-  * https://github.com/sonofspike/assisted-service-onprem
-  * https://schmaustech.blogspot.com/2021/08/deploying-single-node-openshift-via.html
-  * https://cloudcult.dev/cilium-installation-openshift-assisted-installer/
-  * https://github.com/karmab/assisted-installer-cli
-  * https://github.com/rh-telco-tigers/Assisted-Installer-API
+
+## References
+
+- [Deploying Single Node OpenShift via Assisted Installer API](https://schmaustech.blogspot.com/2021/08/deploying-single-node-openshift-via.html)
+- [Cilium Installation with OpenShift Assisted Installer](https://cloudcult.dev/cilium-installation-openshift-assisted-installer/)
+- [https://generator.swagger.io/?url=https://raw.githubusercontent.com/openshift/assisted-service/master/swagger.yaml](https://generator.swagger.io/?url=https://raw.githubusercontent.com/openshift/assisted-service/master/swagger.yaml)
+- [https://github.com/sonofspike/assisted-service-onprem](https://github.com/sonofspike/assisted-service-onprem)
+- [https://github.com/sonofspike/assisted-service-onprem](https://github.com/karmab/assisted-installer-cli)
+- [https://github.com/rh-telco-tigers/Assisted-Installer-API](https://github.com/rh-telco-tigers/Assisted-Installer-API)
