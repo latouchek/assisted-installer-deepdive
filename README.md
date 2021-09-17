@@ -6,7 +6,7 @@ In this series of blog posts, we will demonstrate how Infrastructure as a code b
 
 ## Lab Preparation
 
-In this lab we will simulate Baremetal nodes with KVM VMs. Terraform will be use to orchestrate this virtual infrastructure.
+In this lab we will simulate Baremetal nodes with KVM VMs. Terraform will be used to orchestrate this virtual infrastructure.
 A minimum of 256Gb of Ram and 500Gb SSD drive is recommended. The scripts and install steps below are based around the use of a Centos 8 machine as your host machine.
 In order to have everything set and all the bits installed, run the following commands:
 
@@ -15,7 +15,7 @@ git clone https://github.com/latouchek/assisted-installer-deepdive.git
 cd assisted-installer-deepdive
 cp -r terraform /opt/
 cd scripts
-sh prepare-kvm-host
+sh prepare-kvm-host.sh
 ```
 
 The script creates a dedicated ocp network. It is mandatory to have a DNS and a static DHCP server on that network.
@@ -367,7 +367,7 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
 - Add workers, complete configuration and trigger the installation
 
    It's now time to start our workers. The same discovery process will take place and the new nodes will get the **auto-assign** role. Because a cluster cannot have more than 3 masters, we are sure **auto-assign=worker** this time.
-  Because we set **vip_dhcp_allocation** to **false** in the cluster definition filer, we need to set **api_vip** parameter before we can trigger the installation.
+  Because we set **vip_dhcp_allocation** to **false** in the cluster definition file, we need to set **api_vip** parameter before we can trigger the installation.
 
   ```bash
     curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" \
