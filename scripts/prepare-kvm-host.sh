@@ -1,3 +1,5 @@
+#!/bin/bash
+
 dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
 dnf install -y libvirt libvirt-devel qemu-kvm mkisofs python3-devel jq ipmitool  git make \
   net-tools  wget syslinux libvirt-libs tmux  \
