@@ -479,8 +479,6 @@ We can closely monitor the nodes states during the installation process:
 
 ## Part III : Day 2 Operations
 
-
-
 ## Adding worker nodes
 
 In order to add extra workers to an existing cluster the following process must be followed:
