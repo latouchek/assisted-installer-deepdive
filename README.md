@@ -137,7 +137,7 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
   - 3+ nodes clusters:   **"high_availability_mode": "Full"** and **"schedulable_masters": false**
   - Single Node:   **"high_availability_mode": "None"**
 
-   You can choose if you want to handle **loadbalancing** in house or leave it to OCP by setting **user_managed_networking** to **true** or **false**. In both case, DHCP and DNS server are mandatory (Only DNS in the case of a static IP deployment).
+   You can choose if you want to handle **loadbalancing** in house or leave it to OCP by setting **user_managed_networking** to **true**. In both case, DHCP and DNS server are mandatory (Only DNS in the case of a static IP deployment).
 
 - Use  deployment-multinodes.json to register the new cluster
 
@@ -272,9 +272,8 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
    -H "get_unregistered_clusters: false"| jq -r '.[].hosts'
    ```
 
-    ```json
-     .......
-     {
+    ```bash
+    {
     "checked_in_at": "2021-09-15T22:57:25.484Z",
     "cluster_id": "71db492e-207e-47eb-af7b-c7c716c7e09d",
     "connectivity": "{\"remote_hosts\":[{\"host_id\":\"2121a000-d27e-4596-a408-6813d3114caf\",\"l2_connectivity\":[{\"outgoing_ip_address\":\"192.167.124.12\",\"outgoing_nic\":\"ens3\",\"remote_ip_address\":\"192.167.124.13\",\"remote_mac\":\"aa:bb:cc:11:42:11\",\"successful\":true}],\"l3_connectivity\":[{\"average_rtt_ms\":0.304,\"outgoing_nic\":\"ens3\",\"remote_ip_address\":\"192.167.124.13\",\"successful\":true}]},{\"host_id\":\"84083091-8c0c-470b-a157-d002dbeed785\",\"l2_connectivity\":[{\"outgoing_ip_address\":\"192.167.124.12\",\"outgoing_nic\":\"ens3\",\"remote_ip_address\":\"192.167.124.14\",\"remote_mac\":\"aa:bb:cc:11:42:12\",\"successful\":true}],\"l3_connectivity\":[{\"average_rtt_ms\":0.237,\"outgoing_nic\":\"ens3\",\"remote_ip_address\":\"192.167.124.14\",\"successful\":true}]}]}",
@@ -287,32 +286,23 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
     "installation_disk_id": "/dev/disk/by-path/pci-0000:00:05.0",
     "installation_disk_path": "/dev/vda",
     "inventory": "{\"bmc_address\":\"0.0.0.0\",\"bmc_v6address\":\"::/0\",\"boot\":{\"current_boot_mode\":\"bios\"},\"cpu\":{\"architecture\":\"x86_64\",\"count\":12,\"flags\":[\"fpu\",\"vme\",\"de\",\"pse\",\"tsc\",\"msr\",\"pae\",\"mce\",\"cx8\",\"apic\",\"sep\",\"mtrr\",\"pge\",\"mca\",\"cmov\",\"pat\",\"pse36\",\"clflush\",\"mmx\",\"fxsr\",\"sse\",\"sse2\",\"ss\",\"syscall\",\"nx\",\"pdpe1gb\",\"rdtscp\",\"lm\",\"constant_tsc\",\"arch_perfmon\",\"rep_good\",\"nopl\",\"xtopology\",\"cpuid\",\"tsc_known_freq\",\"pni\",\"pclmulqdq\",\"vmx\",\"ssse3\",\"fma\",\"cx16\",\"pdcm\",\"pcid\",\"sse4_1\",\"sse4_2\",\"x2apic\",\"movbe\",\"popcnt\",\"tsc_deadline_timer\",\"aes\",\"xsave\",\"avx\",\"f16c\",\"rdrand\",\"hypervisor\",\"lahf_lm\",\"abm\",\"cpuid_fault\",\"invpcid_single\",\"pti\",\"ssbd\",\"ibrs\",\"ibpb\",\"stibp\",\"tpr_shadow\",\"vnmi\",\"flexpriority\",\"ept\",\"vpid\",\"ept_ad\",\"fsgsbase\",\"tsc_adjust\",\"bmi1\",\"avx2\",\"smep\",\"bmi2\",\"erms\",\"invpcid\",\"xsaveopt\",\"arat\",\"umip\",\"md_clear\",\"arch_capabilities\"],\"frequency\":3491.914,\"model_name\":\"Intel(R) Xeon(R) CPU E5-1650 v3 @ 3.50GHz\"},\"disks\":[
-      ......................................................truncated.......................................................
+
       {\"bootable\":true,\"by_path\":\"/dev/disk/by-path/pci-0000:00:01.1-ata-1\",\"drive_type\":\"ODD\",\"hctl\":\"0:0:0:0\",\"id\":\"/dev/
-    "kind": "Host",
-    "logs_collected_at": "0001-01-01T00:00:00.000Z",
-    "logs_started_at": "0001-01-01T00:00:00.000Z",
-    "ntp_sources": "[{\"source_name\":\"funky.f5s.de\",\"source_state\":\"unreachable\"},{\"source_name\":\"ntp0.rrze.ipv6.uni-erlangen.
-    ......................................................................................................
+    
+
     "progress": {
       "current_stage": "",
-      "stage_started_at": "0001-01-01T00:00:00.000Z",
-      "stage_updated_at": "0001-01-01T00:00:00.000Z"
+    .
     },
     "progress_stages": null,
     "role": "auto-assign",
-    "stage_started_at": "0001-01-01T00:00:00.000Z",
-    "stage_updated_at": "0001-01-01T00:00:00.000Z",
-    "status": "known",
-    "status_info": "Host is ready to be installed",
-    "status_updated_at": "2021-09-15T19:24:42.938Z",
-    "updated_at": "2021-09-15T22:57:35.116Z",
+    
     "user_name": "admin",
     "validations_info": "{\"hardware\":[{\"id\":\"has-inventory\",\"status\":\"success\",\"message\":\"Valid inventory exists for the host\"},{\"id\":\"has-min-cpu-cores\",\"status\":\"success\",\"message\":\"Sufficient CPU cores\"},{\"id\":\"has-min-memory\",\"status\":\"success\",\"message\":\"Sufficient minimum RAM\"},{\"id\":\"has-min-valid-disks\",\"status\":\"success\",\"message\":\"Sufficient disk capacity\"},{\"id\":\"has-cpu-cores-for-role\",\"status\":\"success\",\"message\":\"Sufficient CPU cores for role auto-assign\"},{\"id\":\"has-memory-for-role\",\"status\":\"success\",\"message\":\"Sufficient RAM for role auto-assign\"},{\"id\":\"hostname-unique\",\"status\":\"success\",\"message\":\"Hostname ocp4-master0.ocpd.lab.local is unique in cluster\"},{\"id\":\"hostname-valid\",\"status\":\"success\",\"message\":\"Hostname ocp4-master0.ocpd.lab.local is allowed\"},{\"id\":\"valid-platform\",\"status\":\"success\",\"message\":\"Platform KVM is allowed\"},
     .............................................................................
     {\"id\":\"sufficient-installation-disk-speed\",\"status\":\"success\",\"message\":\"Speed of installation disk has not yet been measured\"},{\"id\":\"compatible-with-cluster-platform\",\"status\":\"success\",\"message\":\"Host is compatible with cluster platform \"message\":\"lso is disabled\"},{\"id\":\"ocs-requirements-satisfied\",\"status\":\"success\",\"message\":\"ocs is disabled\"}]}"
    }
-  ```
+   ```
 
    This is a truncated version of the full ouput as it contains quite a lot of informations. Basically the agent provides all hardware info to the assisted service so it can have a precise inventory of the host hardware and eventually validate the nodes.
    To get more info about validation and hardware inventory, you can use these 2 one liners
@@ -339,7 +329,8 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
    ```
 
 - Assign role to discovered Nodes
- After validation, each node gets the  'auto-assign' role. We can check with  this API call:
+  
+  After validation, each node gets the  'auto-assign' role. We can check with  this API call:
 
     ```bash
   [root@kvm-host ~]curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept:    application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].role'
@@ -624,7 +615,7 @@ In order to add extra workers to an existing cluster the following process must 
   ocp4-worker1.ocpd.lab.local      Ready      worker   42m   v1.22.0-rc.0+75ee307
   ```
 
-  After a few minutes we shouls see:
+  After a few minutes we should see:
 
   ```bash
   [root@kvm-host ~] oc get nodes

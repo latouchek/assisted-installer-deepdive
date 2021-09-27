@@ -29,16 +29,16 @@ resource "libvirt_network" "ocp_network" {
 }
 
 variable "worker" {
-    type = "list"
+    type = list(string)
     default = ["ocp4-worker1", "ocp4-worker2","ocp4-worker3"]
   }
 variable "master" {
-     type = "list"
+     type = list(string)
      default = ["ocp4-master1", "ocp4-master2","ocp4-master3"]
    }
 
 variable "worker-ht" {
-    type = "list"
+    type = list(string)
     default = ["ocp4-worker1-ht"]
   }
 ####workers
