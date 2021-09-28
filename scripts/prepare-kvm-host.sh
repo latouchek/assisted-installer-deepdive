@@ -6,8 +6,8 @@ dnf install -y libvirt libvirt-devel qemu-kvm mkisofs python3-devel jq ipmitool 
   tar unzip go ipmitool virt-install libguestfs libguestfs-tools libguestfs-xfs net-tools  virt-what nmap
 dnf group install "Development Tools" -y
 systemctl enable --now libvirtd
-wgethttps://releases.hashicorp.com/terraform/$TERRAVERSION/terraform_$TERRAVERSION_linux_amd64.zip
-unzip terraform_$TERRAVERSION_linux_amd64.zip
+wget https://releases.hashicorp.com/terraform/${TERRAVERSION}/terraform_${TERRAVERSION}_linux_amd64.zip
+unzip terraform_${TERRAVERSION}_linux_amd64.zip
 mv terraform /usr/local/sbin/
 rm -f *zip
 
