@@ -81,7 +81,7 @@ In order to provision a cluster the following process must be followed:
 
 ## Part II : Using the Assisted Installer API
 
-In this part we will show how to deploy a 5 nodes OCP cluster y following the steps we mentioned above.
+In this part we will show how to deploy a 5 nodes OCP cluster by following the steps we mentioned above.
 Even though this lab is purely cli based it is recommended to have the [UI](http://192.167.124.1:8080/) on sight to understand the whole process.
 
 ### 1. Deploy  our first cluster with AI  API
@@ -215,7 +215,7 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
   ```bash
   curl \
     -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \
-    -o /var/lib/libvirt/images/default/discovery_image_ocpd.iso
+    -o /var/lib/libvirt/images/discovery_image_ocpd.iso
   ```
 
 - Start the nodes and the discovery process

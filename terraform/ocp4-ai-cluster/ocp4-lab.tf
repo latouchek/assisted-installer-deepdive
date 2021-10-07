@@ -65,7 +65,7 @@ resource "libvirt_domain" "workers" {
   name   = "${element(var.worker, count.index)}"
   memory = "32000"
   vcpu   = 8
-  cpu  = {
+  cpu   {
   mode = "host-passthrough"
   }
   running = false
@@ -92,7 +92,7 @@ resource "libvirt_domain" "workers" {
     volume_id = "${element(libvirt_volume.fatdisk-workers.*.id, count.index)}"
   }
   disk {
-      file = "/var/lib/libvirt/images/default/discovery_image_ocpd.iso"
+      file = "/var/lib/libvirt/images/discovery_image_ocpd.iso"
     }
   disk {
     volume_id = "${element(libvirt_volume.volume-mon-workers.*.id, count.index)}"
@@ -125,7 +125,7 @@ resource "libvirt_domain" "worker-ht" {
   name   = "${element(var.worker-ht, count.index)}"
   memory = "32000"
   vcpu   = 8
-  cpu  = {
+  cpu    {
   mode = "host-passthrough"
   }
   running = false
@@ -152,7 +152,7 @@ resource "libvirt_domain" "worker-ht" {
     volume_id = "${element(libvirt_volume.fatdisk-worker-ht.*.id, count.index)}"
   }
   disk {
-      file = "/var/lib/libvirt/images/default/discovery_image_ocpd.iso"
+      file = "/var/lib/libvirt/images/discovery_image_ocpd.iso"
     }
   graphics {
     type        = "spice"
@@ -179,7 +179,7 @@ resource "libvirt_domain" "masters" {
   name   = "${element(var.master, count.index)}"
   memory = "32000"
   vcpu   = 12
-  cpu = {
+  cpu  {
   mode = "host-passthrough"
   }
   running = true
@@ -206,7 +206,7 @@ resource "libvirt_domain" "masters" {
     volume_id = "${element(libvirt_volume.fatdisk-masters.*.id, count.index)}"
   }
   disk {
-      file = "/var/lib/libvirt/images/default/discovery_image_ocpd.iso"
+      file = "/var/lib/libvirt/images/discovery_image_ocpd.iso"
     }
   graphics {
     type        = "spice"

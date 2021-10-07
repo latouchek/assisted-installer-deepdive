@@ -1,0 +1,37 @@
+{
+  "kind": "Cluster",
+  "name": "ocpd",
+  "openshift_version": "4.8",
+  "base_dns_domain": "lab.local",
+  "hyperthreading": "all",
+  "ingress_vip": "192.167.124.8",
+  "schedulable_masters": true,
+  "platform": {
+    "type": "baremetal"
+   },
+  "user_managed_networking": false,
+  "cluster_networks": [
+    {
+      "cidr": "10.128.0.0/14",
+      "host_prefix": 23
+    }
+  ],
+  "service_networks": [
+    {
+      "cidr": "172.31.0.0/16"
+    }
+  ],
+  "machine_networks": [
+    {
+      "cidr": "192.167.124.0/24"
+    }
+  ],
+  "network_type": "OVNKubernetes",
+  "additional_ntp_source": "ntp1.hetzner.de",
+  "vip_dhcp_allocation": false,
+  "high_availability_mode": "Full",
+  "hosts": [],
+  "ssh_public_key": "Paste ssh pu key here",
+  "pull_secret": "{PASTE pullsecret here}"
+}
+

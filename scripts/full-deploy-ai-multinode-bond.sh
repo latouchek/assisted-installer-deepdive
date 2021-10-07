@@ -2,11 +2,13 @@ export AI_URL='http://192.167.124.1:8090'
 export CLUSTER_SSHKEY=$(cat ~/.ssh/id_ed25519.pub)
 export PULL_SECRET=$(cat pull-secret.txt | jq -R .)
 
+#####Create Cluster definition data file ######
+
 cat << EOF > ./deployment-multinodes.json
 {
   "kind": "Cluster",
   "name": "ocpd",
-  "openshift_version": "4.8",
+  "openshift_version": "4.9",
   "base_dns_domain": "lab.local",
   "hyperthreading": "all",
   "ingress_vip": "192.167.124.8",
@@ -36,10 +38,14 @@ cat << EOF > ./deployment-multinodes.json
   "vip_dhcp_allocation": false,
   "high_availability_mode": "Full",
   "hosts": [],
-  "ssh_public_key": "${CLUSTER_SSHKEY}",
-  "pull_secret": ${PULL_SECRET}
+  "ssh_public_key": "$CLUSTER_SSHKEY",
+  "pull_secret": "$PULL_SECRET"
 }
-EOF
+EOF 
+
+
+#####Create cluster definition
+
 curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters" \
   -d @./deployment-multinodes.json \
   --header "Content-Type: application/json" \
@@ -50,40 +56,40 @@ CLUSTER_ID=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts
 
 echo $CLUSTER_ID
 
-echo  Build ISO
-cat << EOF > ./discovery-iso-params.json
-{
-  "ssh_public_key": "$CLUSTER_SSHKEY",
-   "pull_secret": $PULL_SECRET,
-   "image_type": "full-iso"
-}
-EOF
 
-curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \
-  -d @discovery-iso-params.json \
-  --header "Content-Type: application/json" \
-  | jq '.'
 
-echo download ISO
+#########create definition file for bond####
+jq -n  --arg NMSTATE_YAML1 "$(cat nmstate-bond-worker0.yaml)" --arg NMSTATE_YAML2 "$(cat nmstate-bond-worker1.yaml)" '{
+  "ssh_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM4Hm8ZgmBIduPkPjNMijB6KMCYENnJD7W9piKzjxZxa root@esxi-hetzner.lab.local",
+  "image_type": "full-iso",
+  "static_network_config": [
+    {
+      "network_yaml": $NMSTATE_YAML1,
+      "mac_interface_map": [{"mac_address": "aa:bb:cc:11:42:20", "logical_nic_name": "ens3"}, {"mac_address": "aa:bb:cc:11:42:50", "logical_nic_name": "ens4"},{"mac_address": "aa:bb:cc:11:42:60", "logical_nic_name": "ens5"}]
+    },
+    {
+      "network_yaml": $NMSTATE_YAML2,
+      "mac_interface_map": [{"mac_address": "aa:bb:cc:11:42:21", "logical_nic_name": "ens3"}, {"mac_address": "aa:bb:cc:11:42:51", "logical_nic_name": "ens4"},{"mac_address": "aa:bb:cc:11:42:61", "logical_nic_name": "ens5"}]
+     }
+  ]
+}' > data-net
+
+
+#####Create image####
+curl -H "Content-Type: application/json" -X POST -d @data-net ${AI_URL}/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image | jq .
+
+
+#####Download image#####
 
 curl -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" -o /var/lib/libvirt/images/discovery_image_ocpd.iso
 
+####start masters##
 
-
-echo Create and start Masters
-
-terraform -chdir=/opt/terraform/ocp4-ai-cluster init
-terraform -chdir=/opt/terraform/ocp4-ai-cluster/ apply -auto-approve
+terraform  -chdir=/opt/terraform/ai-bond apply -auto-approve
 
 
 
-echo  Done!!!
-
-echo Wait for discovery process to happen
-
-Sleep 180 
-
-echo Assign Master role to discovered nodes
+####
 
 for i in `curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
      -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].id'| awk 'NR>0' |awk '{print $1;}'`
@@ -91,25 +97,21 @@ do curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "acce
 done
 
 
-echo set api IP
+###set api IP###
 
 curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
 
-echo Start workers
-for i in {1..3}
+###Start workers####
+for i in {0..1}
 do virsh start ocp4-worker$i
 done
 
 sleep 180
 
-echo Start instalation
-
 curl -X POST \
   "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/actions/install" \
   -H "accept: application/json" \
   -H "Content-Type: application/json"
-
-STATUS=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].progress.total_percentage')
 
 echo Wait for install to complete
 
@@ -122,5 +124,3 @@ done
 echo 
 mkdir ~/.kube
 curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/kubeconfig" -H "accept: application/octet-stream" > .kube/config
-
-

@@ -1,7 +1,7 @@
 #!/bin/bash
 TERRAVERSION=1.0.7 ####change me if needed
 dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
-dnf install -y libvirt libvirt-devel qemu-kvm mkisofs python3-devel jq ipmitool  git make \
+dnf install -y libvirt libvirt-devel qemu-kvm mkisofs python3-devel jq ipmitool  git make bash-completion \
   net-tools  wget syslinux libvirt-libs tmux  \
   tar unzip go ipmitool virt-install libguestfs libguestfs-tools libguestfs-xfs net-tools  virt-what nmap
 dnf group install "Development Tools" -y

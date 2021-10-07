@@ -1,0 +1,29 @@
+interfaces:
+- name: bond0 
+  description: Bond 
+  type: bond 
+  state: up 
+  ipv4: 
+    enabled: true
+    dhcp: true
+    auto-dns: true
+    auto-gateway: true
+    auto-routes: true
+  link-aggregation:
+    mode: active-backup 
+    options:
+      miimon: '140' 
+    port: 
+      - ens3
+      - ens4
+- name: ens3
+  state: up
+  type: ethernet
+- name: ens4
+  state: up
+  type: ethernet
+- name: ens5
+  state: down
+  type: ethernet
+  ipv4:
+   enabled: false 

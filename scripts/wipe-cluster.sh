@@ -6,6 +6,8 @@ curl -X DELETE "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept
 
 echo Wiping nodes
 
-terraform -chdir=/opt/terraform-ocp4-cluster-ai destroy -auto-approve
+terraform -chdir=/opt/terraform/ocp4-ai-cluster destroy -auto-approve
 
 rm -rf ~/.kube
+
+rm -f deployment-multinodes.json

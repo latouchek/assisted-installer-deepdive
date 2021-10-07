@@ -32,11 +32,11 @@ curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/
   | jq '.'
 
 #Download ISO
-curl -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" -o /var/lib/libvirt/images/default/discovery_image_ocpd.iso
+curl -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" -o /var/lib/libvirt/images/discovery_image_ocpd.iso
 
 ####start masters##
-terraform -chdir=/opt/terraform-ocp4-cluster-ai init
-terraform -chdir=/opt/terraform-ocp4-cluster-ai/ apply -auto-approve
+terraform -chdir=/opt/terraform/ocp4-ai-cluster init
+terraform -chdir=/opt/terraform/ocp4-ai-cluster apply -auto-approve
 
 
 echo  Done!!!

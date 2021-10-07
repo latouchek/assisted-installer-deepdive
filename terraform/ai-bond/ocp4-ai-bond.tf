@@ -5,32 +5,53 @@ terraform {
     }
   }
 }
+# instance the provider
 provider "libvirt" {
+  # uri = "qemu+ssh://root@kvm-ovh/system"
   uri = "qemu:///system"
 }
-resource "libvirt_pool" "images" {
-  name = "images"
-  type = "dir"
-  path = "/var/lib/libvirt/images"
+resource "libvirt_network" "kube_network" {
+  name = "ocp4ai-net"
+  mode = "nat"
+  autostart = true
+  domain = "lab.local"
+  addresses = ["10.17.3.0/24"]
+  bridge = "br7"
+  dhcp {
+        enabled = false
+        }
+  dns {
+    enabled = true
+    local_only = false
+    forwarders {
+        address = "192.167.124.5"
+     }
+
+  }
 }
-resource "libvirt_network" "ocp_network" {
+resource "libvirt_network" "kube_network" {
   name = "ocp4-net"
   mode = "nat"
   autostart = true
   domain = "lab.local"
-  addresses = ["192.167.124/24"]
-  bridge = "virbr-ocp4"
+  addresses = ["192.167.124.0/24"]
+  bridge = "br-bond"
   dhcp {
         enabled = false
         }
-  depends_on = [
-    libvirt_pool.images,
-  ]
+  dns {
+    enabled = true
+    local_only = false
+    forwarders {
+        address = "192.167.124.5"
+     }
+
+  }
 }
 
 variable "worker" {
     type = list(string)
-    default = ["ocp4-worker1", "ocp4-worker2","ocp4-worker3"]
+    default = ["ocp4-worker0", "ocp4-worker1", "ocp4-worker2"]
   }
 variable "master" {
      type = list(string)
@@ -43,6 +64,7 @@ variable "worker-ht" {
   }
 ####workers
 resource "libvirt_volume" "fatdisk-workers" {
+  # name           = "fatdisk-${element(var.worker, count.index)}"
   name           = "fatdisk-${element(var.worker, count.index)}"
   pool           = "images"
   size           = 130000000000
@@ -84,6 +106,15 @@ resource "libvirt_domain" "workers" {
     network_name = "ocp4-net"
     mac = "AA:BB:CC:11:42:2${count.index}"
   }
+  network_interface {
+    network_name = "ocp4-net"
+    mac = "AA:BB:CC:11:42:5${count.index}"
+  }
+  network_interface {
+    network_name = "ocp4ai-net"
+    mac = "AA:BB:CC:11:42:6${count.index}"
+  }
+
   console {
     type        = "pty"
     target_port = "0"
@@ -118,7 +149,7 @@ resource "libvirt_domain" "workers" {
   }
   count = "${length(var.worker)}"
   depends_on = [
-    libvirt_network.ocp_network,
+    libvirt_network.kube_network,
   ]
 }
 ####workers-ht###
@@ -144,6 +175,15 @@ resource "libvirt_domain" "worker-ht" {
     network_name = "ocp4-net"
     mac = "AA:BB:CC:11:42:3${count.index}"
   }
+  network_interface {
+    network_name = "ocp4-net"
+    mac = "AA:BB:CC:11:42:A${count.index}"
+  }
+  network_interface {
+    network_name = "ocp4ai-net"
+    mac = "AA:BB:CC:11:42:B${count.index}"
+  }
+
   console {
     type        = "pty"
     target_port = "0"
@@ -169,7 +209,7 @@ resource "libvirt_domain" "worker-ht" {
   }
   count = "${length(var.worker-ht)}"
   depends_on = [
-    libvirt_network.ocp_network,
+    libvirt_network.kube_network,
   ]
 }
 
@@ -187,7 +227,7 @@ resource "libvirt_domain" "masters" {
   name   = "${element(var.master, count.index)}"
   memory = "32000"
   vcpu   = 12
-  cpu   {
+  cpu  {
   mode = "host-passthrough"
   }
   running = true
@@ -223,6 +263,6 @@ resource "libvirt_domain" "masters" {
   }
   count = "${length(var.master)}"
   depends_on = [
-    libvirt_network.ocp_network,
+    libvirt_network.kube_network,
   ]
 }
