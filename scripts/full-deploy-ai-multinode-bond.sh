@@ -59,8 +59,8 @@ echo $CLUSTER_ID
 
 
 #########create definition file for bond####
-jq -n  --arg NMSTATE_YAML1 "$(cat nmstate-bond-worker0.yaml)" --arg NMSTATE_YAML2 "$(cat nmstate-bond-worker1.yaml)" '{
-  "ssh_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM4Hm8ZgmBIduPkPjNMijB6KMCYENnJD7W9piKzjxZxa root@esxi-hetzner.lab.local",
+jq -n  --arg NMSTATE_YAML1 "$(cat ~/bond/nmstate-bond-worker0.yaml)" --arg NMSTATE_YAML2 "$(cat ~/bond/nmstate-bond-worker1.yaml)" '{
+  "ssh_public_key": "$CLUSTER_SSHKEY",
   "image_type": "full-iso",
   "static_network_config": [
     {

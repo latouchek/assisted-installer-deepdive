@@ -643,6 +643,271 @@ In order to add extra workers to an existing cluster the following process must 
 
   We succefully added an extra worker.
 
+## Part IV : Network Operations
+
+## Bond configuration
+
+In order to provision a cluster with bonded interfaces for Workers, we need to use the **static_network_config** parameter when building the Discovery ISO.
+
+ ```json
+"static_network_config": [
+    {
+      "network_yaml": "Network state in json format for a specific node",
+      "mac_interface_map": [
+        {
+          "mac_address": "string",
+          "logical_nic_name": "string"
+        }
+      ]
+    }
+  ]
+ ```
+
+- Let's take a look at the different values we need to provide:
+
+  - "network_yaml": "Network state in json format"
+    - Nodes network configuration is handled by [kubernetes-nmstate](https://github.com/nmstate/kubernetes-nmstate) and needs to be provided in JSON. For simplicity we will first write the desired network state in YAML format and JSON encode it for each nodes. Many examples are provided [here](https://nmstate.io/examples.html#interfaces-ethernet) and [here](https://github.com/openshift/assisted-service/blob/master/docs/user-guide/restful-api-guide.md).
+
+      The YAML below describes the bond definition we will write for each workers in our Lab.
+
+      In this example we create a bond with ens3 and ens4 as slaves and we assign a static ip to ens5. Each node needs its own nmstate file.
+
+      ```yaml
+          interfaces:
+          - name: bond0 
+            description: Bond 
+            type: bond 
+            state: up 
+            ipv4: 
+              enabled: true
+              dhcp: true
+              auto-dns: true
+              auto-gateway: true
+              auto-routes: true
+            link-aggregation:
+              mode: balance-rr
+              options:
+                miimon: '140' 
+              port: 
+                - ens3
+                - ens4
+          - name: ens3
+            state: up
+            type: ethernet
+          - name: ens4
+            state: up
+            type: ethernet
+          - name: ens5
+            state: up
+            type: ethernet
+            ipv4:
+              address:
+              - ip: 10.17.3.4
+                prefix-length: 24
+              enabled: true      
+              ```
+
+  - "mac_interface_map": []
+    - Because all nodes will boot from the same Discovery ISO, mac addresses and logical nic names need to be mapped as shown in example bellow:
+
+      ```json
+        {
+        "mac_interface_map": [
+          {
+            "mac_address": "aa:bb:cc:11:42:21",
+            "logical_nic_name": "ens3"
+          },
+          {
+            "mac_address": "aa:bb:cc:11:42:51",
+            "logical_nic_name": "ens4"
+          },
+          {
+            "mac_address": "aa:bb:cc:11:42:61",
+            "logical_nic_name": "ens5"
+          }
+        ]
+        }
+      ```
+
+      It is important to understand that with both nmstates and mac mapping, each node can be individually configured when booting from the same Discovery  ISO.  
+      Now we have described the logic, let's create the data file we'll present to the API.  We'll use jq to json encode and inject nmstate YAML into our final data file.
+
+- Prepare the environment:
+
+  In this lab workers node have 3 NICs connected to 2 different networks (See Terraform file provided for more details)
+  - nmstate files are provided in the git repo
+
+    ```bash
+    cd assisted-installer-deepdive
+    mkdir ~/bond
+    cp config/nmstate*   ~/bond/
+    ```
+
+  - Create the network data file
+
+      ```bash
+      export AI_URL='http://192.167.124.1:8090'
+      export CLUSTER_SSHKEY=$(cat ~/.ssh/id_ed25519.pub)
+      export PULL_SECRET=$(cat pull-secret.txt | jq -R .)
+      export NODE_SSH_KEY="$CLUSTER_SSHKEY"
+      cd /root/
+
+      jq -n  --arg SSH_KEY "$NODE_SSH_KEY" --arg NMSTATE_YAML1 "$(cat ~/bond/nmstate-bond-worker0.yaml)" --arg NMSTATE_YAML2 "$(cat ~/bond/nmstate-bond-worker1.yaml)" '{
+        "ssh_public_key": $CLUSTER_SSHKEY",
+        "image_type": "full-iso",
+        "static_network_config": [
+          {
+            "network_yaml": $NMSTATE_YAML1,
+            "mac_interface_map": [{"mac_address": "aa:bb:cc:11:42:20", "logical_nic_name": "ens3"}, {"mac_address": "aa:bb:cc:11:42:50", "logical_nic_name": "ens4"},{"mac_address": "aa:bb:cc:11:42:60", "logical_nic_name": "ens5"}]
+          },
+          {
+            "network_yaml": $NMSTATE_YAML2,
+            "mac_interface_map": [{"mac_address": "aa:bb:cc:11:42:21", "logical_nic_name": "ens3"}, {"mac_address": "aa:bb:cc:11:42:51", "logical_nic_name": "ens4"},{"mac_address": "aa:bb:cc:11:42:61", "logical_nic_name": "ens5"}]
+          }
+        ]
+      }' > bond-workers
+
+      ```
+
+  - Build the image
+
+      ```bash
+      curl -H "Content-Type: application/json" -X POST \
+          -d @bond-workers ${AI_URL}/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image | jq .
+      ```
+
+- Deploy the cluster
+
+  **_For a fully automated deployment use the script full-deploy-ai-multinode-bond.sh provided in the git repo_**
+
+  ```bash  
+  ###Create infra ###
+
+  terraform  -chdir=/opt/terraform/ai-bond apply -auto-approve
+  
+  ####Assign master role to master VMs####
+
+  for i in `curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
+      -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].id'| awk 'NR>0' |awk '{print $1;}'`
+  do curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"hosts_roles\": [ { \"id\": \"$i\", \"role\": \"master\" } ]}"
+  done
+
+  ###set api IP###
+
+  curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
+
+  ###Start workers####
+  for i in {0..1}
+  do virsh start ocp4-worker$i
+  done
+
+  sleep 180
+
+  ###Start installation###
+  curl -X POST \
+    "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/actions/install" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json"
+
+  echo Wait for install to complete
+
+  while [[ $STATUS != 100 ]]
+  do
+  sleep 5
+  STATUS=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].progress.total_percentage')
+  done
+
+  echo Download kubeconfig
+  mkdir ~/.kube
+  curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/kubeconfig" -H "accept: application/octet-stream" > .kube/config
+
+  ```
+
+- Check workers are configured as requested:
+  - After sshing into worker0 we can see all connections were created
+
+    ```bash
+    [root@ocp4-worker0 ~] ls -1  /etc/NetworkManager/system-connections/
+      bond0.nmconnection
+      br-ex.nmconnection
+      ens3-slave-ovs-clone.nmconnection
+      ens3.nmconnection
+      ens4-slave-ovs-clone.nmconnection
+      ens4.nmconnection
+      ens5.nmconnection
+      ovs-if-br-ex.nmconnection
+      ovs-if-phys0.nmconnection
+      ovs-port-br-ex.nmconnection
+      ovs-port-phys0.nmconnection
+      ```
+
+  - Check configuration for each NIC:
+
+    ```bash
+    cat  /etc/NetworkManager/system-connections/ens3.nmconnection 
+    [connection]
+    id=ens3
+    uuid=501c47c3-7c1d-4424-b131-f40dd89827a9
+    type=ethernet
+    interface-name=ens3
+    master=bond0
+    permissions=
+    slave-type=bond
+    autoconnect=true
+    autoconnect-priority=1
+
+    [ethernet]
+    mac-address-blacklist=
+    ```
+
+    ```bash
+    cat  /etc/NetworkManager/system-connections/ens4.nmconnection 
+    [connection]
+    id=ens4
+    uuid=6baa8165-0fa0-4eae-83cb-f89462aa6f18
+    type=ethernet
+    interface-name=ens4
+    master=bond0
+    permissions=
+    slave-type=bond
+    autoconnect=true
+    autoconnect-priority=1
+
+    [ethernet]
+    mac-address-blacklist=
+    ```
+
+    ```bash
+    cat  /etc/NetworkManager/system-connections/ens5.nmconnection 
+    [connection]
+    id=ens5
+    uuid=c04c3a19-c8d7-4c6b-a836-c64b573de270
+    type=ethernet
+    interface-name=ens5
+    permissions=
+    autoconnect=true
+    autoconnect-priority=1
+
+    [ethernet]
+    mac-address-blacklist=
+
+    [ipv4]
+    address1=10.17.3.3/24
+    dhcp-client-id=mac
+    dns-search=
+    method=manual
+
+    [ipv6]
+    addr-gen-mode=eui64
+    dhcp-duid=ll
+    dhcp-iaid=mac
+    dns-search=
+    method=disabled
+
+    [proxy]
+    ```
+
+
 ### Thank you for reading
 
 ## References

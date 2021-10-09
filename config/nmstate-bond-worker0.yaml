@@ -10,7 +10,7 @@ interfaces:
     auto-gateway: true
     auto-routes: true
   link-aggregation:
-    mode: active-backup 
+    mode: balance-rr 
     options:
       miimon: '140' 
     port: 
@@ -23,7 +23,10 @@ interfaces:
   state: up
   type: ethernet
 - name: ens5
-  state: down
+  state: up
   type: ethernet
   ipv4:
-   enabled: false 
+    address:
+    - ip: 10.17.3.3
+      prefix-length: 24
+    enabled: true
