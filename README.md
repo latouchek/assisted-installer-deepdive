@@ -643,7 +643,7 @@ In order to add extra workers to an existing cluster the following process must 
 
   We succefully added an extra worker.
 
-## Part IV : Network Operations
+## Part IV : Network Tweaks
 
 ## Bond configuration
 
