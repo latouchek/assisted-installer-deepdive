@@ -32,42 +32,34 @@ dnf install -y @container-tools
 dnf group install "Development Tools" -y
 dnf -y install python3-pip socat make tmux git jq crun
 git clone https://github.com/openshift/assisted-service
-cd assisted-service
-IP=192.167.124.1
-AI_URL=http://$IP:8090
+
 ```
 
-Modify **onprem-environment** and **Makefile** to set proper URL and port forwarding
+Follow the documentation https://github.com/openshift/assisted-service/tree/master/deploy/podman
 
-```bash
-sed -i "s@SERVICE_BASE_URL=.*@SERVICE_BASE_URL=$AI_URL@" onprem-environment
-sed -i "s/5432,8000,8090,8080/5432:5432 -p 8000:8000 -p 8090:8090 -p 8080:8080/" Makefile
-make deploy-onprem
-.
-.
-.
-```
+
 
 If everything went well, we should see 4 containers running inside a pod
 
 ```bash
 [root@kvm-host ~]podman ps
-CONTAINER ID  IMAGE                                          COMMAND               CREATED             STATUS                 PORTS                                                                                           NAMES
-a940818185cb  k8s.gcr.io/pause:3.5                                                 3 minutes ago       Up 2 minutes ago       0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  59b56cb07140-infra
-d94a46c8b515  quay.io/ocpmetal/postgresql-12-centos7:latest  run-postgresql        2 minutes ago       Up 2 minutes ago       0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  db
-8c0e90d8c4fa  quay.io/ocpmetal/ocp-metal-ui:latest           /opt/bitnami/scri...  About a minute ago  Up About a minute ago  0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  ui
-e98627cdc5f8  quay.io/ocpmetal/assisted-service:latest       /assisted-service     42 seconds ago      Up 43 seconds ago      0.0.0.0:5432->5432/tcp, 0.0.0.0:8000->8000/tcp, 0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp  installer
+CONTAINER ID  IMAGE                                                      COMMAND               CREATED       STATUS           PORTS                                                                   NAMES
+cb02f495d0ca  registry.access.redhat.com/ubi8/pause:latest                                     17 hours ago  Up 17 hours ago  0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp, 0.0.0.0:8888->8888/tcp  d5dc2f7d5679-infra
+2996a90155ff  quay.io/centos7/postgresql-12-centos7:latest               run-postgresql        17 hours ago  Up 17 hours ago  0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp, 0.0.0.0:8888->8888/tcp  assisted-installer-db
+4602467fafac  quay.io/edge-infrastructure/assisted-installer-ui:latest   /deploy/start.sh      17 hours ago  Up 17 hours ago  0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp, 0.0.0.0:8888->8888/tcp  assisted-installer-ui
+8a41cf088f1f  quay.io/edge-infrastructure/assisted-image-service:latest  /assisted-image-s...  17 hours ago  Up 17 hours ago  0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp, 0.0.0.0:8888->8888/tcp  assisted-installer-image-service
+eebfa3dec103  quay.io/ocpmetal/assisted-service:latest                   /assisted-service     17 hours ago  Up 17 hours ago  0.0.0.0:8080->8080/tcp, 0.0.0.0:8090->8090/tcp, 0.0.0.0:8888->8888/tcp  assisted-installer-service
 ```
 
 ```bash
 [root@kvm-host ~] podman pod ps
-POD ID        NAME                STATUS      CREATED        INFRA ID      # OF CONTAINERS
-59b56cb07140  assisted-installer  Running     4 minutes ago  a940818185cb  4
+POD ID        NAME                STATUS      CREATED       INFRA ID      # OF CONTAINERS
+d5dc2f7d5679  assisted-installer  Running     17 hours ago  cb02f495d0ca  5
 ```
 
 API should be accessible at <http://192.167.124.1:8090> and GUI at <http://192.167.124.1:8080/>
 
-API documentation can be found [here](https://generator.swagger.io/?url=https://raw.githubusercontent.com/openshift/assisted-service/master/swagger.yaml)
+API documentation can be found [here](https://github.com/openshift/assisted-service/blob/master/swagger.yaml)
 
 ### 2.  How does it work
 
@@ -95,8 +87,7 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
     {
       "kind": "Cluster",
       "name": "ocpd",  
-      "openshift_version": "4.8",
-      "ocp_release_image": "quay.io/openshift-release-dev/ocp-release:4.8.5-x86_64",
+      "openshift_version": "4.9",
       "base_dns_domain": "lab.local",
       "hyperthreading": "all",
       "ingress_vip": "192.167.124.8",
@@ -143,12 +134,12 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
 
    ```bash
    AI_URL='http://192.167.124.1:8090'
-   curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters" \
+   curl -s -X POST "$AI_URL/api/assisted-install/v2/clusters" \
       -d @./deployment-multinodes.json --header "Content-Type: application/json" | jq .
    ```
 
 - Check cluster is registered
-  Once the cluster definition has been sent to an the API we should be able to retrieve its unique id
+  Once the cluster definition has been sent to the API we should be able to retrieve its unique id
 
   ```bash
     CLUSTER_ID=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].id')
@@ -188,34 +179,52 @@ Even though this lab is purely cli based it is recommended to have the [UI](http
   ```
 
 - Build  the discovery boot ISO
-The discovery boot ISO is a live CoreOS image that the nodes will boot from. Once booted an introspection will be performed by the discovery agent and data sent to the assisted service. If the node passes the validation tests its **status_info** will be **"Host is ready to be installed"**.
-We need some extra parameters to be injected into the ISO . To do so, we create a data file as described bellow:
+
+  The discovery boot ISO is a live CoreOS image that the nodes will boot from. Once booted an introspection will be performed by the discovery agent and data sent to the assisted service. If the node passes the validation tests its **status_info** will be **"Host is ready to be installed"**. 
+  
+  We need to register a new ressource called **infra_env** that represents the configuration needed to create the discovery ISO.  
+  To do so, we create a data file as described bellow:
 
   ```bash
-    cat << EOF > ./discovery-iso-params.json
+  cat << EOF > ./discovery-iso-params.json
    {
-    "ssh_public_key": "$CLUSTER_SSHKEY",
-     "pull_secret": $PULL_SECRET,
-     "image_type": "full-iso"
+      "name": "ocpd_infra-env",
+      "openshift_version": "4.9",
+      "pull_secret": "$PULLSECRET",
+      "ssh_public_key": "$PUBKEY",
+      "image_type": "full-iso",
+      "cluster_id": "$CLUSTERID"
     }
-   EOF
+  
+  EOF
   ```
 
-  ISO is now ready to be built! Let's make the API call! As you can see we use the data file so pull-secret and ssh public key are injected into the live ISO.
+  ISO is now ready to be built! Let's make the API call! 
+
 
   ```bash
-   curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \  
-  -d @discovery-iso-params.json \
-  --header "Content-Type: application/json" \
-  | jq '.'
+   curl -H "Content-Type: application/json" \
+   -X POST -d @discovery-iso-params.json ${AI_URL}/api/assisted-install/v2/infra-envs | jq .
   ```
 
-  In real world we would need to present this ISO to our hosts so they can boot from it. Because we are using KVM, we are going to download the ISO in the libvirt images directory and later create the VMs
+  In real world we would need to present this ISO to our hosts so they can boot from it. Because we are using KVM, we are going to download the ISO in the libvirt images directory and later create the VMs.
+
+  Get the infra_env ID
 
   ```bash
-  curl \
-    -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \
-    -o /var/lib/libvirt/images/discovery_image_ocpd.iso
+  export INFRAENV_ID=$(curl -X GET "$AI_URL/api/assisted-install/v2/infra-envs" -H "accept: application/json" | jq -r '.[].id' | awk 'NR<2')
+  echo $INFRAENV_ID
+  ```
+  Retrieve the ISO url
+
+  ```bash
+  ISO_URL=$(curl -X GET "$AI_URL/api/assisted-install/v2/infra-envs/$INFRAENV_ID/downloads/image-url" -H "accept: application/json"|jq -r .url)
+  ```
+  Download the ISO
+
+  ```bash
+  curl -X GET "$ISO_URL" -H "accept: application/octet-stream" -o  /var/lib/libvirt/images/discovery_image_ocpd.iso
+
   ```
 
 - Start the nodes and the discovery process
@@ -344,7 +353,11 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
   ```bash
    for i in `curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
      -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].id'| awk 'NR>0' |awk '{print $1;}'`
-   do curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"hosts_roles\": [ { \"id\": \"$i\", \"role\": \"master\" } ]}"
+   do 
+   curl -X PATCH "$AI_URL/api/assisted-install/v2/infra-envs/$INFRAENV_ID/$id" \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{"host_role": "master"}'
    done
 
   ```
@@ -366,7 +379,7 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
   Because we set **vip_dhcp_allocation** to **false** in the cluster definition file, we need to set **api_vip** parameter before we can trigger the installation.
 
   ```bash
-    curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" \
+    curl -X PATCH "$AI_URL/api/assisted-install/v2/clusters/$CLUSTER_ID" \
     -H "accept: application/json"\
     -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
   ```
@@ -374,9 +387,10 @@ We need some extra parameters to be injected into the ISO . To do so, we create 
    And finally start installation:
 
    ```bash
-     curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" \
-     -H "accept: application/json" \
-     -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
+  curl -X POST \
+    "$AI_URL/api/assisted-install/v2/clusters/$CLUSTER_ID/actions/install" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json"
     ```
 
    During the installation process, disks will be written and nodes will reboot. One of the masters will also play the bootstrap role until the control plane is ready then the installation will continue as usual.
@@ -438,474 +452,30 @@ We can closely monitor the nodes states during the installation process:
 
    ```
 
-- Retrieve kubeconfig and credentials
+  Retrieve kubeconfig and credentials
 
   ```bash
-  [root@kvm-host ~] curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/kubeconfig" \
-  -H "accept: application/octet-stream" > .kube/config
+  [root@kvm-host ~] curl -X GET '$AI_URL/api/assisted-install/v2/clusters/$CLUSTER_ID/downloads/credentials?file_name=kubeconfig'   -H 'accept: application/octet-stream' > /root/.kube/config
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
   100 12104  100 12104    0     0  2955k      0 --:--:-- --:--:-- --:--:-- 2955k
   [root@kvm-host ~]oc get nodes
-  NAME                          STATUS   ROLES    AGE    VERSION
-  ocp4-master0.ocpd.lab.local   Ready    master   119m   v1.21.1+9807387
-  ocp4-master1.ocpd.lab.local   Ready    master   134m   v1.21.1+9807387
-  ocp4-master2.ocpd.lab.local   Ready    master   134m   v1.21.1+9807387
-  ocp4-worker0.ocpd.lab.local   Ready    worker   119m   v1.21.1+9807387
-  ocp4-worker1.ocpd.lab.local   Ready    worker   119m   v1.21.1+9807387
-  ```
+  NAME                          STATUS   ROLES    AGE   VERSION
+  ocp4-master0.ocpd.lab.local   Ready    master   29m   v1.22.3+e790d7f
+  ocp4-master1.ocpd.lab.local   Ready    master   50m   v1.22.3+e790d7f
+  ocp4-master2.ocpd.lab.local   Ready    master   49m   v1.22.3+e790d7f
+  ocp4-worker0.ocpd.lab.local   Ready    worker   29m   v1.22.3+e790d7f
+  ocp4-worker1.ocpd.lab.local   Ready    worker   29m   v1.22.3+e790d7f
+  ocp4-worker2.ocpd.lab.local   Ready    worker   29m   v1.22.3+e790d7f
 
+  ```
+  Retrieve kubeadmin password
   ```bash
-  [root@kvm-host ~] curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/credentials" \
-  -H "accept: application/json" |jq -r .
-    % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                   Dload  Upload   Total   Spent    Left  Speed
-  100   132  100   132    0     0  44000      0 --:--:-- --:--:-- --:--:-- 44000
-  {
-    "console_url": "https://console-openshift-console.apps.ocpd.lab.local",
-    "password": "8Tepe-uxF7Q-ztHg5-yoKPQ",
-    "username": "kubeadmin"
-  }
+  [root@kvm-host ~] curl -X GET "$AI_URL/api/assisted-install/v2/clusters/20515852-206c-48d4-940b-82ec984e63a0/downloads/credentials?file_name=kubeadmin-password'   -H 'accept: application/octet-stream'
+  kgSTn-nq5nq-zmLmA-mb9xm
   ```  
 
-## Part III : Day 2 Operations
-
-## Adding worker nodes
-
-In order to add extra workers to an existing cluster the following process must be followed:
-
-- Create a new 'AddHost cluster'
-
-   This creates a new OpenShift cluster definition for adding nodes to our existing OCP cluster.
-   We have to manually generate the new cluster id and name  and make sure the api_vip_dnsname matches the existing cluster.
-
-   ```bash
-  ###Generate id for addhost cluster####
-
-  NCLUSTER_ID=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].id'| tr b c)
-  ##### creating addhost cluster
-  echo $NCLUSTER_ID
-
-  curl -X POST "http://192.167.124.1:8090/api/assisted-install/v1/add_hosts_clusters" \
-     -H "accept: application/json" -H "Content-Type: application/json" \
-     -d "{ \"id\": \"$NCLUSTER_ID\", \"name\": \"ocp2\", \"api_vip_dnsname\": \"api.ocpd.lab.local\", \"openshift_version\": \"4.8\"}"
-
-  ```
-
-- Create a new discovery boot media the new nodes will boot from in order to be introspected and validated
-
-   ```bash
-   ####Patch new cluster to add pullsecret####
-
-   cat << EOF > ./new-params.json
-    {
-      "ssh_public_key": "$CLUSTER_SSHKEY",
-      "pull_secret": $PULL_SECRET
-    }
-    EOF
-    curl -s -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID"   -d @new-params.json   --header "Content-Type: application/json"   | jq '.'
-
-    ####create and download new ISO ####
-    curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID/downloads/image" \
-      -d @new-params.json --header "Content-Type: application/json" \
-      | jq '.'
-
-    curl -L "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID/downloads/image" \
-    -o /var/lib/libvirt/images/default/discovery_image_ocpd2.iso
-   ```
-
-- Before starting the extra workers, make sure they boot from the new created ISO  
-
-  ```bash
-  virsh change-media --domain ocp4-worker1-ht hda \
-                     --current --update \
-                     --source /var/lib/libvirt/images/default/discovery_image_ocpd2.iso
-  virsh start --domain ocp4-worker1-ht
-  ```
-
-- Let's take a closer look at both clusters
-
-  ```bash
-  curl -s -X GET   -H "Content-Type: application/json"   "$AI_URL/api/assisted-install/v1/clusters"   | jq -r .[].id
-  ```
-
-  Output should look like this:
-
-  ```bash
-  58fb589e-2f8b-44ee-b056-08499ba7ddd5  <-- UUID of the existing cluster
-  58fc589e-2f8c-44ee-c056-08499ca7ddd5  <-- UUID of the AddHost cluster
-  ```
-
-  Use the API to get more details:
-
-  ```bash
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID"   | jq -r .kind
-  AddHostsCluster
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID"   | jq -r .kind
-  Cluster
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID"   | jq -r .status
-  adding-hosts
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID"   | jq -r .status
-  installed
-  ####Check nodes for each clusters####
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID"   | jq -r .hosts[].requested_hostname
-  ocp4-master1.ocpd.lab.local
-  ocp4-master2.ocpd.lab.local
-  ocp4-worker0.ocpd.lab.local
-  ocp4-worker1.ocpd.lab.local
-  ocp4-master0.ocpd.lab.local
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID"   | jq -r .hosts[].requested_hostname
-  ocp4-worker1-ht.ocpd.lab.local
-  [root@kvm-host ~] curl -s -X GET   --header "Content-Type: application/json"   \
-  "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID"   | jq -r .hosts[].role
-  auto-assign
-  ```
-
-  We see above that everything is working as expected:
-  - The new cluster is in  **adding-hosts** state
-  - The existing cluster is in  **installed** state
-  - The new worker has been discovered and has been given the right role
-
-- Start the new node installation:
-
-  ```bash
-  curl -X POST "$AI_URL/api/assisted-install/v1/clusters/$NCLUSTER_ID/actions/install_hosts" \
-  -H "accept: application/json" | jq '.'
-  ```
-
-  As soon the installation begin,the new node will get the worker roles
-
-  ```bash
-  [root@kvm-host ~] curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].role'
-  master
-  master
-  worker
-  worker
-  master
-  worker
-  ```
-
-- Wait for the new worker to reboot and check pending CSRs
-
-  ```bash
-  [root@kvm-host ~] oc get csr|grep Pending
-  csr-5jrm7 5m55s   kubernetes.io/kube-apiserver-client-kubelet   system:serviceaccount:openshift-machine-config-operator:node-bootstrapper         <none>              Pending
-
-  ###Approve all CSR###
-  [root@kvm-host ~] for csr in $(oc -n openshift-machine-api get csr | awk '/Pending/ {print $1}'); do oc adm certificate approve $csr;done
-  certificatesigningrequest.certificates.k8s.io/csr-5jrm7 approved
-  ```
-
-  We should now see the new node:
-
-  ```bash
-  [root@kvm-host ~] oc get nodes
-  NAME                             STATUS     ROLES    AGE   VERSION
-  ocp4-master0.ocpd.lab.local      Ready      master   59m   v1.22.0-rc.0+75ee307
-  ocp4-master1.ocpd.lab.local      Ready      master   40m   v1.22.0-rc.0+75ee307
-  ocp4-master2.ocpd.lab.local      Ready      master   59m   v1.22.0-rc.0+75ee307
-  ocp4-worker0.ocpd.lab.local      Ready      worker   42m   v1.22.0-rc.0+75ee307
-  ocp4-worker1-ht.ocpd.lab.local   NotReady   worker   48s   v1.22.0-rc.0+75ee307
-  ocp4-worker1.ocpd.lab.local      Ready      worker   42m   v1.22.0-rc.0+75ee307
-  ```
-
-  After a few minutes we should see:
-
-  ```bash
-  [root@kvm-host ~] oc get nodes
-  NAME                             STATUS   ROLES    AGE     VERSION
-  ocp4-master0.ocpd.lab.local      Ready    master   62m     v1.22.0-rc.0+75ee307
-  ocp4-master1.ocpd.lab.local      Ready    master   44m     v1.22.0-rc.0+75ee307
-  ocp4-master2.ocpd.lab.local      Ready    master   62m     v1.22.0-rc.0+75ee307
-  ocp4-worker0.ocpd.lab.local      Ready    worker   45m     v1.22.0-rc.0+75ee307
-  ocp4-worker1-ht.ocpd.lab.local   Ready    worker   3m54s   v1.22.0-rc.0+75ee307
-  ocp4-worker1.ocpd.lab.local      Ready    worker   45m     v1.22.0-rc.0+75ee307
-  ```
-
-- Check with AI API
-
-   ```bash
-  [root@kvm-host ~] curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" \
-  -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r .[].hosts[].status
-  installed
-  installed
-  installed
-  installed
-  installed
-  added-to-existing-cluster
-  ```
-
-  We succefully added an extra worker.
-
-## Part IV : Network Tweaks
-
-## Bond configuration
-
-In order to provision a cluster with bonded interfaces for Workers, we need to use the **static_network_config** parameter when building the Discovery ISO.
-
- ```json
-"static_network_config": [
-    {
-      "network_yaml": "Network state in json format for a specific node",
-      "mac_interface_map": [
-        {
-          "mac_address": "string",
-          "logical_nic_name": "string"
-        }
-      ]
-    }
-  ]
- ```
-
-- Let's take a look at the different values we need to provide:
-
-  - "network_yaml": "Network state in json format"
-    - Nodes network configuration is handled by [kubernetes-nmstate](https://github.com/nmstate/kubernetes-nmstate) and needs to be provided in JSON. For simplicity we will first write the desired network state in YAML format and JSON encode it for each nodes. Many examples are provided [here](https://nmstate.io/examples.html#interfaces-ethernet) and [here](https://github.com/openshift/assisted-service/blob/master/docs/user-guide/restful-api-guide.md).
-
-      The YAML below describes the bond definition we will write for each workers in our Lab.
-
-      In this example we create a bond with ens3 and ens4 as slaves and we assign a static ip to ens5. Each node needs its own nmstate file.
-
-      ```yaml
-          interfaces:
-          - name: bond0 
-            description: Bond 
-            type: bond 
-            state: up 
-            ipv4: 
-              enabled: true
-              dhcp: true
-              auto-dns: true
-              auto-gateway: true
-              auto-routes: true
-            link-aggregation:
-              mode: balance-rr
-              options:
-                miimon: '140' 
-              port: 
-                - ens3
-                - ens4
-          - name: ens3
-            state: up
-            type: ethernet
-          - name: ens4
-            state: up
-            type: ethernet
-          - name: ens5
-            state: up
-            type: ethernet
-            ipv4:
-              address:
-              - ip: 10.17.3.4
-                prefix-length: 24
-              enabled: true      
-              ```
-
-  - "mac_interface_map": []
-    - Because all nodes will boot from the same Discovery ISO, mac addresses and logical nic names need to be mapped as shown in example bellow:
-
-      ```json
-        {
-        "mac_interface_map": [
-          {
-            "mac_address": "aa:bb:cc:11:42:21",
-            "logical_nic_name": "ens3"
-          },
-          {
-            "mac_address": "aa:bb:cc:11:42:51",
-            "logical_nic_name": "ens4"
-          },
-          {
-            "mac_address": "aa:bb:cc:11:42:61",
-            "logical_nic_name": "ens5"
-          }
-        ]
-        }
-      ```
-
-      It is important to understand that with both nmstates and mac mapping, each node can be individually configured when booting from the same Discovery  ISO.  
-      Now we have described the logic, let's create the data file we'll present to the API.  We'll use jq to json encode and inject nmstate YAML into our final data file.
-
-- Prepare the environment:
-
-  In this lab workers node have 3 NICs connected to 2 different networks (See Terraform file provided for more details)
-  - nmstate files are provided in the git repo
-
-    ```bash
-    cd assisted-installer-deepdive
-    mkdir ~/bond
-    cp config/nmstate*   ~/bond/
-    ```
-
-  - Create the network data file
-
-      ```bash
-      export AI_URL='http://192.167.124.1:8090'
-      export CLUSTER_SSHKEY=$(cat ~/.ssh/id_ed25519.pub)
-      export PULL_SECRET=$(cat pull-secret.txt | jq -R .)
-      export NODE_SSH_KEY="$CLUSTER_SSHKEY"
-      cd /root/
-
-      jq -n  --arg SSH_KEY "$NODE_SSH_KEY" --arg NMSTATE_YAML1 "$(cat ~/bond/nmstate-bond-worker0.yaml)" --arg NMSTATE_YAML2 "$(cat ~/bond/nmstate-bond-worker1.yaml)" '{
-        "ssh_public_key": $CLUSTER_SSHKEY",
-        "image_type": "full-iso",
-        "static_network_config": [
-          {
-            "network_yaml": $NMSTATE_YAML1,
-            "mac_interface_map": [{"mac_address": "aa:bb:cc:11:42:20", "logical_nic_name": "ens3"}, {"mac_address": "aa:bb:cc:11:42:50", "logical_nic_name": "ens4"},{"mac_address": "aa:bb:cc:11:42:60", "logical_nic_name": "ens5"}]
-          },
-          {
-            "network_yaml": $NMSTATE_YAML2,
-            "mac_interface_map": [{"mac_address": "aa:bb:cc:11:42:21", "logical_nic_name": "ens3"}, {"mac_address": "aa:bb:cc:11:42:51", "logical_nic_name": "ens4"},{"mac_address": "aa:bb:cc:11:42:61", "logical_nic_name": "ens5"}]
-          }
-        ]
-      }' > bond-workers
-
-      ```
-
-  - Build the image
-
-      ```bash
-      curl -H "Content-Type: application/json" -X POST \
-          -d @bond-workers ${AI_URL}/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image | jq .
-      ```
-
-- Deploy the cluster
-
-  **_For a fully automated deployment use the script full-deploy-ai-multinode-bond.sh provided in the git repo_**
-
-  ```bash  
-  ###Create infra ###
-
-  terraform  -chdir=/opt/terraform/ai-bond apply -auto-approve
-  
-  ####Assign master role to master VMs####
-
-  for i in `curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true"\
-      -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].hosts[].id'| awk 'NR>0' |awk '{print $1;}'`
-  do curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"hosts_roles\": [ { \"id\": \"$i\", \"role\": \"master\" } ]}"
-  done
-
-  ###set api IP###
-
-  curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
-
-  ###Start workers####
-  for i in {0..1}
-  do virsh start ocp4-worker$i
-  done
-
-  sleep 180
-
-  ###Start installation###
-  curl -X POST \
-    "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/actions/install" \
-    -H "accept: application/json" \
-    -H "Content-Type: application/json"
-
-  echo Wait for install to complete
-
-  while [[ $STATUS != 100 ]]
-  do
-  sleep 5
-  STATUS=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts=true" -H "accept: application/json" -H "get_unregistered_clusters: false"| jq -r '.[].progress.total_percentage')
-  done
-
-  echo Download kubeconfig
-  mkdir ~/.kube
-  curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/kubeconfig" -H "accept: application/octet-stream" > .kube/config
-
-  ```
-
-- Check workers are configured as requested:
-  - After sshing into worker0 we can see all connections were created
-
-    ```bash
-    [root@ocp4-worker0 ~] ls -1  /etc/NetworkManager/system-connections/
-      bond0.nmconnection
-      br-ex.nmconnection
-      ens3-slave-ovs-clone.nmconnection
-      ens3.nmconnection
-      ens4-slave-ovs-clone.nmconnection
-      ens4.nmconnection
-      ens5.nmconnection
-      ovs-if-br-ex.nmconnection
-      ovs-if-phys0.nmconnection
-      ovs-port-br-ex.nmconnection
-      ovs-port-phys0.nmconnection
-      ```
-
-  - Check configuration for each NIC:
-
-    ```bash
-    cat  /etc/NetworkManager/system-connections/ens3.nmconnection 
-    [connection]
-    id=ens3
-    uuid=501c47c3-7c1d-4424-b131-f40dd89827a9
-    type=ethernet
-    interface-name=ens3
-    master=bond0
-    permissions=
-    slave-type=bond
-    autoconnect=true
-    autoconnect-priority=1
-
-    [ethernet]
-    mac-address-blacklist=
-    ```
-
-    ```bash
-    cat  /etc/NetworkManager/system-connections/ens4.nmconnection 
-    [connection]
-    id=ens4
-    uuid=6baa8165-0fa0-4eae-83cb-f89462aa6f18
-    type=ethernet
-    interface-name=ens4
-    master=bond0
-    permissions=
-    slave-type=bond
-    autoconnect=true
-    autoconnect-priority=1
-
-    [ethernet]
-    mac-address-blacklist=
-    ```
-
-    ```bash
-    cat  /etc/NetworkManager/system-connections/ens5.nmconnection 
-    [connection]
-    id=ens5
-    uuid=c04c3a19-c8d7-4c6b-a836-c64b573de270
-    type=ethernet
-    interface-name=ens5
-    permissions=
-    autoconnect=true
-    autoconnect-priority=1
-
-    [ethernet]
-    mac-address-blacklist=
-
-    [ipv4]
-    address1=10.17.3.3/24
-    dhcp-client-id=mac
-    dns-search=
-    method=manual
-
-    [ipv6]
-    addr-gen-mode=eui64
-    dhcp-duid=ll
-    dhcp-iaid=mac
-    dns-search=
-    method=disabled
-
-    [proxy]
-    ```
+TO BE CONTINUED
 
 
 ### Thank you for reading

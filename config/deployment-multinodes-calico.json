@@ -1,7 +1,7 @@
 {
   "kind": "Cluster",
   "name": "ocpd",
-  "openshift_version": "4.8",
+  "openshift_version": "4.9",
   "base_dns_domain": "lab.local",
   "hyperthreading": "all",
   "ingress_vip": "192.167.124.8",

@@ -6,7 +6,7 @@ cat << EOF > ./deployment-multinodes.json
 {
   "kind": "Cluster",
   "name": "ocpd",
-  "openshift_version": "4.8",
+  "openshift_version": "4.9",
   "base_dns_domain": "lab.local",
   "hyperthreading": "all",
   "ingress_vip": "192.167.124.8",
@@ -40,7 +40,7 @@ cat << EOF > ./deployment-multinodes.json
   "pull_secret": ${PULL_SECRET}
 }
 EOF
-curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters" \
+curl -s -X POST "$AI_URL/api/assisted-install/v2/clusters" \
   -d @./deployment-multinodes.json \
   --header "Content-Type: application/json" \
   | jq .
@@ -51,22 +51,31 @@ CLUSTER_ID=$(curl -s -X GET "$AI_URL/api/assisted-install/v2/clusters?with_hosts
 echo $CLUSTER_ID
 
 echo  Build ISO
+
+
 cat << EOF > ./discovery-iso-params.json
 {
-  "ssh_public_key": "$CLUSTER_SSHKEY",
+   "name": "ocpd_infra-env",
+   "openshift_version": "4.9",
+   "cluster_id": $CLUSTERID,
+   "ssh_public_key": "$CLUSTER_SSHKEY",
    "pull_secret": $PULL_SECRET,
    "image_type": "full-iso"
 }
 EOF
+curl -H "Content-Type: application/json" -X POST -d @discovery-iso-params.json \
+ ${AI_URL}/api/assisted-install/v2/infra-envs | jq .
 
-curl -s -X POST "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" \
-  -d @discovery-iso-params.json \
-  --header "Content-Type: application/json" \
-  | jq '.'
+export INFRAENV_ID=$(curl -X GET "$AI_URL/api/assisted-install/v2/infra-envs" -H "accept: application/json" | jq -r '.[].id' | awk 'NR<2')
+echo $INFRAENV_ID
+
+
+ISO_URL=$(curl -X GET "$AI_URL/api/assisted-install/v2/infra-envs/$INFRAENV_ID/downloads/image-url" -H "accept: application/json"|jq -r .url)
+
 
 echo download ISO
 
-curl -L "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/image" -o /var/lib/libvirt/images/discovery_image_ocpd.iso
+curl -X GET "$ISO_URL" -H "accept: application/octet-stream" -o -o /var/lib/libvirt/images/discovery_image_ocpd.iso
 
 
 
@@ -93,7 +102,7 @@ done
 
 echo set api IP
 
-curl -X PATCH "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
+curl -X PATCH "$AI_URL/api/assisted-install/v2/clusters/$CLUSTER_ID" -H "accept: application/json" -H "Content-Type: application/json" -d "{ \"api_vip\": \"192.167.124.7\"}"
 
 echo Start workers
 for i in {1..3}
@@ -105,7 +114,7 @@ sleep 180
 echo Start instalation
 
 curl -X POST \
-  "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/actions/install" \
+  "$AI_URL/api/assisted-install/v2/clusters/$CLUSTER_ID/actions/install" \
   -H "accept: application/json" \
   -H "Content-Type: application/json"
 
@@ -121,6 +130,6 @@ done
 
 echo 
 mkdir ~/.kube
-curl -X GET "$AI_URL/api/assisted-install/v1/clusters/$CLUSTER_ID/downloads/kubeconfig" -H "accept: application/octet-stream" > .kube/config
-
+curl -X GET '$AI_URL/api/assisted-install/v2/clusters/$CLUSTER_ID/downloads/credentials?file_name=kubeconfig' \
+     -H 'accept: application/octet-stream' > /root/.kube/config
 
